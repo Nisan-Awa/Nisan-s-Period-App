@@ -1,6 +1,7 @@
 # Miscellaneous
 *.class
 *.log
+*.hprof
 *.pyc
 *.swp
 .DS_Store
@@ -11,6 +12,10 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+
+# Environment files
+.env
+.env.*
 
 # IntelliJ related
 *.iml
@@ -32,6 +37,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+coverage/
 
 # Symbolication related
 app.*.symbols
