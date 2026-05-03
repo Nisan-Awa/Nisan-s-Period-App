@@ -35,8 +35,8 @@ migrate_working_dir/
 .flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
+build/
 .pub/
-/build/
 coverage/
 
 # Symbolication related
