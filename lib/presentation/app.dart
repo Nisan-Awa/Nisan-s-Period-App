@@ -97,6 +97,13 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
     return false;
   }
 
+  Future<void> _clearData() async {
+    final next = AppState.sample();
+    setState(() => _state = next);
+    await _repository.clear();
+    await _repository.save(next);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_loaded) {
@@ -106,7 +113,11 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
         ),
       );
     }
-    return MainShell(state: _state, onChanged: _update);
+    return MainShell(
+      state: _state,
+      onChanged: _update,
+      onClearData: _clearData,
+    );
   }
 }
 
@@ -499,10 +510,16 @@ class _OnboardingPrivacy extends StatelessWidget {
 }
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.state, required this.onChanged});
+  const MainShell({
+    super.key,
+    required this.state,
+    required this.onChanged,
+    required this.onClearData,
+  });
 
   final AppState state;
   final ValueChanged<AppState> onChanged;
+  final Future<void> Function() onClearData;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -569,7 +586,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         onChanged: widget.onChanged,
         onCancel: () => setState(() => _tab = 0),
       ),
-      InsightsScreen(state: widget.state),
+      InsightsScreen(state: widget.state, onChanged: widget.onChanged),
       SelfCareScreen(
         state: widget.state,
         onChanged: widget.onChanged,
@@ -663,8 +680,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            SettingsScreen(state: widget.state, onChanged: widget.onChanged),
+        builder: (_) => SettingsScreen(
+          state: widget.state,
+          onChanged: widget.onChanged,
+          onClearData: widget.onClearData,
+        ),
       ),
     );
   }
@@ -1892,22 +1912,30 @@ class _DailyLogScreenState extends State<DailyLogScreen> {
 }
 
 class InsightsScreen extends StatelessWidget {
-  const InsightsScreen({super.key, required this.state});
+  const InsightsScreen({
+    super.key,
+    required this.state,
+    required this.onChanged,
+  });
 
   final AppState state;
+  final ValueChanged<AppState> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final prediction = CyclePrediction(state);
-    final avgCycle = state.history.isEmpty
+    final predictionHistory = prediction.predictionHistory;
+    final avgCycle = predictionHistory.isEmpty
         ? state.cycleLength
-        : (state.history.map((e) => e.length).reduce((a, b) => a + b) /
-                  state.history.length)
+        : (predictionHistory.map((e) => e.length).reduce((a, b) => a + b) /
+                  predictionHistory.length)
               .round();
-    final avgPeriod = state.history.isEmpty
+    final avgPeriod = predictionHistory.isEmpty
         ? state.periodLength
-        : (state.history.map((e) => e.periodLength).reduce((a, b) => a + b) /
-                  state.history.length)
+        : (predictionHistory
+                      .map((e) => e.periodLength)
+                      .reduce((a, b) => a + b) /
+                  predictionHistory.length)
               .round();
     final logged = state.logs.map((entry) => entry.log).toList();
     final commonMood = mostCommon(logged.map((log) => log.mood));
@@ -1932,7 +1960,7 @@ class InsightsScreen extends StatelessWidget {
               icon: Icons.autorenew_rounded,
               title: 'Average cycle',
               value: '$avgCycle days',
-              note: 'Last ${state.history.length} cycles',
+              note: '${predictionHistory.length} cycles included',
             ),
             InsightCard(
               icon: Icons.water_drop_outlined,
@@ -1968,6 +1996,26 @@ class InsightsScreen extends StatelessWidget {
             child: TrendChart(records: state.history),
           ),
         ),
+        const SizedBox(height: 18),
+        SectionTitle(
+          title: 'Prediction Controls',
+          trailing: 'Exclude unusual cycles from averages',
+        ),
+        for (final entry in state.history.indexed)
+          SwitchTileCard(
+            icon: Icons.rule_folder_outlined,
+            title: formatDate(entry.$2.start),
+            subtitle:
+                '${entry.$2.length}-day cycle, ${entry.$2.periodLength}-day period',
+            value: entry.$2.ignoredForPrediction,
+            onChanged: (value) {
+              final nextHistory = [...state.history];
+              nextHistory[entry.$1] = entry.$2.copyWith(
+                ignoredForPrediction: value,
+              );
+              onChanged(state.copyWith(history: nextHistory));
+            },
+          ),
         const SizedBox(height: 18),
         SectionTitle(title: 'Patterns'),
         InfoRow(
@@ -2370,10 +2418,12 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.state,
     required this.onChanged,
+    required this.onClearData,
   });
 
   final AppState state;
   final ValueChanged<AppState> onChanged;
+  final Future<void> Function() onClearData;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -2543,8 +2593,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Clear cycle and health logs from this device.',
               danger: true,
               onTap: () async {
-                await const LocalAppStateRepository().clear();
-                onChanged(AppState.sample());
+                await widget.onClearData();
                 if (context.mounted) {
                   _showMessageSheet(
                     context,

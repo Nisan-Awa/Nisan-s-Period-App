@@ -6,7 +6,11 @@ void main() {
   testWidgets('opens LunaCycle today screen', (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: MainShell(state: AppState.sample(), onChanged: (_) {}),
+        home: MainShell(
+          state: AppState.sample(),
+          onChanged: (_) {},
+          onClearData: () async {},
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 1200));
@@ -27,6 +31,9 @@ void main() {
             return MainShell(
               state: state,
               onChanged: (next) => setState(() => state = next),
+              onClearData: () async {
+                setState(() => state = AppState.sample());
+              },
             );
           },
         ),

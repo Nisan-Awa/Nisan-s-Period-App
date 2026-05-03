@@ -35,16 +35,21 @@ class CyclePrediction {
   late final int effectiveCycleLength;
   late final int effectivePeriodLength;
 
+  List<CycleRecord> get predictionHistory =>
+      state.history.where((record) => !record.ignoredForPrediction).toList();
+
   int _learnedCycleLength() {
-    if (state.history.length < 3) return state.cycleLength;
-    final latest = state.history.takeLast(math.min(state.history.length, 6));
+    final records = predictionHistory;
+    if (records.length < 3) return state.cycleLength;
+    final latest = records.takeLast(math.min(records.length, 6));
     return (latest.map((e) => e.length).reduce((a, b) => a + b) / latest.length)
         .round();
   }
 
   int _learnedPeriodLength() {
-    if (state.history.length < 3) return state.periodLength;
-    final latest = state.history.takeLast(math.min(state.history.length, 6));
+    final records = predictionHistory;
+    if (records.length < 3) return state.periodLength;
+    final latest = records.takeLast(math.min(records.length, 6));
     return (latest.map((e) => e.periodLength).reduce((a, b) => a + b) /
             latest.length)
         .round();
@@ -67,20 +72,22 @@ class CyclePrediction {
   }
 
   String get confidence {
-    if (state.history.length >= 6 && _cycleVariation <= 3 && state.isRegular) {
+    final records = predictionHistory;
+    if (records.length >= 6 && _cycleVariation <= 3 && state.isRegular) {
       return 'High confidence';
     }
-    if (state.history.length >= 3 && _cycleVariation <= 7) {
+    if (records.length >= 3 && _cycleVariation <= 7) {
       return 'Medium confidence';
     }
     return 'Low confidence';
   }
 
   int get _cycleVariation {
-    if (state.history.isEmpty) {
+    final records = predictionHistory;
+    if (records.isEmpty) {
       return 99;
     }
-    final lengths = state.history.map((e) => e.length).toList();
+    final lengths = records.map((e) => e.length).toList();
     return lengths.reduce(math.max) - lengths.reduce(math.min);
   }
 

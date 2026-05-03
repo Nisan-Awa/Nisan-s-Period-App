@@ -228,17 +228,34 @@ class CycleRecord {
     required this.start,
     required this.length,
     required this.periodLength,
+    this.ignoredForPrediction = false,
   });
 
   final DateTime start;
   final int length;
   final int periodLength;
+  final bool ignoredForPrediction;
+
+  CycleRecord copyWith({
+    DateTime? start,
+    int? length,
+    int? periodLength,
+    bool? ignoredForPrediction,
+  }) {
+    return CycleRecord(
+      start: start ?? this.start,
+      length: length ?? this.length,
+      periodLength: periodLength ?? this.periodLength,
+      ignoredForPrediction: ignoredForPrediction ?? this.ignoredForPrediction,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
       'start': start.toIso8601String(),
       'length': length,
       'periodLength': periodLength,
+      'ignoredForPrediction': ignoredForPrediction,
     };
   }
 
@@ -254,6 +271,7 @@ class CycleRecord {
         1,
         14,
       ),
+      ignoredForPrediction: json['ignoredForPrediction'] as bool? ?? false,
     );
   }
 }
