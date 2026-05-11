@@ -15,6 +15,7 @@ class AppState {
     required this.sensitiveNotificationsHidden,
     required this.notificationPermissionAsked,
     required this.privacyLockEnabled,
+    required this.themeMode,
     required this.history,
     required this.todayLog,
     required this.logs,
@@ -31,6 +32,7 @@ class AppState {
   final bool sensitiveNotificationsHidden;
   final bool notificationPermissionAsked;
   final bool privacyLockEnabled;
+  final ThemeMode themeMode;
   final List<CycleRecord> history;
   final DailyLog todayLog;
   final List<DailyLogEntry> logs;
@@ -50,6 +52,7 @@ class AppState {
       sensitiveNotificationsHidden: true,
       notificationPermissionAsked: false,
       privacyLockEnabled: false,
+      themeMode: ThemeMode.light,
       history: [
         CycleRecord(
           start: lastStart.subtract(const Duration(days: 87)),
@@ -102,6 +105,7 @@ class AppState {
     bool? sensitiveNotificationsHidden,
     bool? notificationPermissionAsked,
     bool? privacyLockEnabled,
+    ThemeMode? themeMode,
     List<CycleRecord>? history,
     DailyLog? todayLog,
     List<DailyLogEntry>? logs,
@@ -120,6 +124,7 @@ class AppState {
       notificationPermissionAsked:
           notificationPermissionAsked ?? this.notificationPermissionAsked,
       privacyLockEnabled: privacyLockEnabled ?? this.privacyLockEnabled,
+      themeMode: themeMode ?? this.themeMode,
       history: history ?? this.history,
       todayLog: todayLog ?? this.todayLog,
       logs: logs ?? this.logs,
@@ -160,6 +165,7 @@ class AppState {
       'sensitiveNotificationsHidden': sensitiveNotificationsHidden,
       'notificationPermissionAsked': notificationPermissionAsked,
       'privacyLockEnabled': privacyLockEnabled,
+      'themeMode': themeMode.name,
       'history': history.map((record) => record.toJson()).toList(),
       'todayLog': todayLog.toJson(),
       'logs': logs.map((entry) => entry.toJson()).toList(),
@@ -201,6 +207,7 @@ class AppState {
           fallback.notificationPermissionAsked,
       privacyLockEnabled:
           json['privacyLockEnabled'] as bool? ?? fallback.privacyLockEnabled,
+      themeMode: _themeModeFromJson(json['themeMode']) ?? fallback.themeMode,
       history: ((json['history'] as List<dynamic>?) ?? const [])
           .whereType<Map<String, dynamic>>()
           .map(CycleRecord.fromJson)
@@ -221,6 +228,12 @@ class AppState {
           .ifEmpty(fallback.reminders),
     );
   }
+}
+
+ThemeMode? _themeModeFromJson(Object? value) {
+  if (value == ThemeMode.dark.name || value == 'dark') return ThemeMode.dark;
+  if (value == ThemeMode.light.name || value == 'light') return ThemeMode.light;
+  return null;
 }
 
 class CycleRecord {

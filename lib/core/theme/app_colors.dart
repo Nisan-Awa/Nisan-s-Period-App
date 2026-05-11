@@ -9,7 +9,7 @@ class AppColors {
   static const lavender = Color(0xFFE9DDFF);
   static const creamWhite = Color(0xFFFFF8FA);
   static const deepText = Color(0xFF2B2230);
-  static const softText = Color(0xFF8A7F8F);
+  static const softText = Color(0xFF5F5365);
   static const successGreen = Color(0xFF7BDCB5);
   static const warningPeach = Color(0xFFFFB88C);
   static const periodPink = Color(0xFFFF5A7D);

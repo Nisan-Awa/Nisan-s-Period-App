@@ -15,17 +15,27 @@ import '../data_model/app_state.dart';
 import '../repository/app_state_repository.dart';
 import '../repository/local_app_state_repository.dart';
 
+final ValueNotifier<ThemeMode> lunaCycleThemeMode = ValueNotifier(
+  ThemeMode.light,
+);
+
 class PeriodTrackerApp extends StatelessWidget {
   const PeriodTrackerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: appName,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      home: const LunaCycleRoot(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: lunaCycleThemeMode,
+      builder: (context, themeMode, _) {
+        return MaterialApp(
+          title: appName,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: themeMode,
+          home: const LunaCycleRoot(),
+        );
+      },
     );
   }
 }
@@ -56,12 +66,14 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
       _state = next;
       _loaded = true;
     });
+    lunaCycleThemeMode.value = next.themeMode;
     _syncRemindersSilently(next);
   }
 
   void _update(AppState next) {
     final previous = _state;
     setState(() => _state = next);
+    lunaCycleThemeMode.value = next.themeMode;
     _repository.save(next);
     if (_shouldSyncReminders(previous, next)) {
       _syncRemindersSilently(next);
@@ -274,9 +286,9 @@ class _OnboardingShell extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           subtitle,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 15,
-            color: AppColors.softText,
+            color: _mutedTextColor(context),
             height: 1.4,
             fontWeight: FontWeight.w600,
           ),
@@ -822,103 +834,115 @@ class TodayScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: AppColors.creamWhite,
+      backgroundColor: _isDark(context)
+          ? const Color(0xFF180F1A)
+          : AppColors.creamWhite,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                22,
-                4,
-                22,
-                24 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Cycle Dates',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Update the exact date your period started. LunaCycle uses this everywhere: Today, Calendar, Insights, and Self-Care.',
-                    style: TextStyle(
-                      color: AppColors.softText,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  InfoRow(
-                    icon: Icons.water_drop_outlined,
-                    title: 'Last period started',
-                    value: formatDate(lastStart),
-                  ),
-                  FilledButton.icon(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: lastStart,
-                        firstDate: DateTime.now().subtract(
-                          const Duration(days: 730),
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.86,
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                return Padding(
+                  padding: EdgeInsets.fromLTRB(22, 4, 22, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cycle Dates',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ).copyWith(color: _textColor(context)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Update the exact date your period started. LunaCycle uses this everywhere: Today, Calendar, Insights, and Self-Care.',
+                        style: TextStyle(
+                          color: _mutedTextColor(context),
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
                         ),
-                        lastDate: DateTime.now().add(const Duration(days: 90)),
-                      );
-                      if (picked != null) {
-                        setSheetState(() => lastStart = dateOnly(picked));
-                      }
-                    },
-                    icon: const Icon(Icons.calendar_month_outlined),
-                    label: const Text('Choose Start Date'),
-                  ),
-                  const SizedBox(height: 12),
-                  SliderPanel(
-                    label: 'Usual cycle length',
-                    value: cycleLength,
-                    min: 21,
-                    max: 45,
-                    unit: 'days',
-                    onChanged: (value) =>
-                        setSheetState(() => cycleLength = value),
-                  ),
-                  const SizedBox(height: 12),
-                  SliderPanel(
-                    label: 'Usual period length',
-                    value: periodLength,
-                    min: 2,
-                    max: 10,
-                    unit: 'days',
-                    onChanged: (value) =>
-                        setSheetState(() => periodLength = value),
-                  ),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: () {
-                      onChanged(
-                        state.copyWith(
-                          lastPeriodStart: lastStart,
-                          cycleLength: cycleLength,
-                          periodLength: periodLength,
+                      ),
+                      const SizedBox(height: 16),
+                      InfoRow(
+                        icon: Icons.water_drop_outlined,
+                        title: 'Last period started',
+                        value: formatDate(lastStart),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: lastStart,
+                            firstDate: DateTime.now().subtract(
+                              const Duration(days: 730),
+                            ),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 90),
+                            ),
+                          );
+                          if (picked != null) {
+                            setSheetState(() => lastStart = dateOnly(picked));
+                          }
+                        },
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: const Text('Choose Start Date'),
+                      ),
+                      const SizedBox(height: 12),
+                      SliderPanel(
+                        label: 'Usual cycle length',
+                        value: cycleLength,
+                        min: 21,
+                        max: 45,
+                        unit: 'days',
+                        onChanged: (value) =>
+                            setSheetState(() => cycleLength = value),
+                      ),
+                      const SizedBox(height: 12),
+                      SliderPanel(
+                        label: 'Usual period length',
+                        value: periodLength,
+                        min: 2,
+                        max: 10,
+                        unit: 'days',
+                        onChanged: (value) =>
+                            setSheetState(() => periodLength = value),
+                      ),
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        onPressed: () {
+                          onChanged(
+                            state.copyWith(
+                              lastPeriodStart: lastStart,
+                              cycleLength: cycleLength,
+                              periodLength: periodLength,
+                            ),
+                          );
+                          Navigator.of(sheetContext).pop();
+                        },
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('Save Cycle Dates'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryPink,
+                          minimumSize: const Size.fromHeight(54),
                         ),
-                      );
-                      Navigator.of(sheetContext).pop();
-                    },
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('Save Cycle Dates'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primaryPink,
-                      minimumSize: const Size.fromHeight(54),
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         );
       },
     );
@@ -931,112 +955,130 @@ class TodayScreen extends StatelessWidget {
     DateTime startDate = dateOnly(DateTime.now());
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: AppColors.creamWhite,
+      backgroundColor: _isDark(context)
+          ? const Color(0xFF180F1A)
+          : AppColors.creamWhite,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (_, setSheetState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Period Started',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Use this when bleeding begins. It updates your current cycle and improves future estimates.',
-                    style: TextStyle(
-                      color: AppColors.softText,
-                      fontWeight: FontWeight.w700,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  InfoRow(
-                    icon: Icons.event_available_outlined,
-                    title: 'Start date',
-                    value: formatDate(startDate),
-                  ),
-                  Row(
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
+          ),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: startDate,
-                              firstDate: DateTime.now().subtract(
-                                const Duration(days: 90),
-                              ),
-                              lastDate: DateTime.now(),
-                            );
-                            if (picked != null) {
-                              setSheetState(() => startDate = dateOnly(picked));
-                            }
-                          },
-                          icon: const Icon(Icons.edit_calendar_outlined),
-                          label: const Text('Change Date'),
+                      Text(
+                        'Period Started',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ).copyWith(color: _textColor(context)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Use this when bleeding begins. It updates your current cycle and improves future estimates.',
+                        style: TextStyle(
+                          color: _mutedTextColor(context),
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            final normalizedStart = dateOnly(startDate);
-                            final cycleLengthDelta = normalizedStart
-                                .difference(dateOnly(state.lastPeriodStart))
-                                .inDays;
-                            final nextCycleLength = clampInt(
-                              cycleLengthDelta > 0
-                                  ? cycleLengthDelta
-                                  : prediction.effectiveCycleLength,
-                              21,
-                              45,
-                            );
-                            final updatedHistory = [
-                              for (final record in state.history)
-                                if (!sameDay(record.start, normalizedStart))
-                                  record,
-                              CycleRecord(
-                                start: normalizedStart,
-                                length: nextCycleLength,
-                                periodLength: state.periodLength,
-                              ),
-                            ]..sort((a, b) => a.start.compareTo(b.start));
-                            onChanged(
-                              state.copyWith(
-                                lastPeriodStart: normalizedStart,
-                                cycleLength: nextCycleLength,
-                                history: updatedHistory,
-                              ),
-                            );
-                            final messenger = ScaffoldMessenger.of(context);
-                            Navigator.of(sheetContext).pop();
-                            messenger.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Period start updated to ${formatDate(normalizedStart)}.',
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.check_rounded),
-                          label: const Text('Confirm'),
-                        ),
+                      const SizedBox(height: 16),
+                      InfoRow(
+                        icon: Icons.event_available_outlined,
+                        title: 'Start date',
+                        value: formatDate(startDate),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: startDate,
+                                  firstDate: DateTime.now().subtract(
+                                    const Duration(days: 90),
+                                  ),
+                                  lastDate: DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setSheetState(
+                                    () => startDate = dateOnly(picked),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.edit_calendar_outlined),
+                              label: const Text('Change Date'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                final normalizedStart = dateOnly(startDate);
+                                final cycleLengthDelta = normalizedStart
+                                    .difference(dateOnly(state.lastPeriodStart))
+                                    .inDays;
+                                final nextCycleLength = clampInt(
+                                  cycleLengthDelta > 0
+                                      ? cycleLengthDelta
+                                      : prediction.effectiveCycleLength,
+                                  21,
+                                  45,
+                                );
+                                final updatedHistory = [
+                                  for (final record in state.history)
+                                    if (!sameDay(record.start, normalizedStart))
+                                      record,
+                                  CycleRecord(
+                                    start: normalizedStart,
+                                    length: nextCycleLength,
+                                    periodLength: state.periodLength,
+                                  ),
+                                ]..sort((a, b) => a.start.compareTo(b.start));
+                                onChanged(
+                                  state.copyWith(
+                                    lastPeriodStart: normalizedStart,
+                                    cycleLength: nextCycleLength,
+                                    history: updatedHistory,
+                                  ),
+                                );
+                                final messenger = ScaffoldMessenger.of(context);
+                                Navigator.of(sheetContext).pop();
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Period start updated to ${formatDate(normalizedStart)}.',
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.check_rounded),
+                              label: const Text('Confirm'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            );
-          },
+                );
+              },
+            ),
+          ),
         );
       },
     );
@@ -1057,23 +1099,28 @@ class StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.white, Color(0xFFFFE2EE), Color(0xFFF1E8FF)],
+          colors: dark
+              ? const [Color(0xFF271729), Color(0xFF37213B), Color(0xFF1B1020)]
+              : const [Colors.white, Color(0xFFFFE2EE), Color(0xFFF1E8FF)],
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryPink.withValues(alpha: 0.14),
+            color: dark
+                ? Colors.black.withValues(alpha: 0.32)
+                : AppColors.primaryPink.withValues(alpha: 0.14),
             blurRadius: 30,
             offset: const Offset(0, 16),
           ),
         ],
-        border: Border.all(color: Colors.white.withValues(alpha: 0.8)),
+        border: Border.all(color: _cardBorderColor(context)),
       ),
       child: Column(
         children: [
@@ -1090,13 +1137,13 @@ class StatusCard extends StatelessWidget {
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                         height: 1.06,
-                      ),
+                      ).copyWith(color: _textColor(context)),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Next period: ${formatShort(prediction.nextPeriodStart)} - ${formatShort(prediction.nextPeriodEnd)}',
-                      style: const TextStyle(
-                        color: AppColors.softText,
+                      style: TextStyle(
+                        color: _mutedTextColor(context),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1109,7 +1156,9 @@ class StatusCard extends StatelessWidget {
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.76),
+                  color: dark
+                      ? const Color(0xFF402543)
+                      : Colors.white.withValues(alpha: 0.76),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
@@ -1200,13 +1249,13 @@ class _CycleRingState extends State<CycleRing>
                   style: const TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w900,
-                  ),
+                  ).copyWith(color: _textColor(context)),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   widget.prediction.ringCenterBottom,
-                  style: const TextStyle(
-                    color: AppColors.softText,
+                  style: TextStyle(
+                    color: _mutedTextColor(context),
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1464,50 +1513,69 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ? 'Fertile window estimate'
         : 'Cycle day ${day.difference(prediction.currentCycleStart).inDays + 1}';
     final log = widget.state.logFor(day);
+    final dark = _isDark(context);
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: AppColors.creamWhite,
+      backgroundColor: dark ? const Color(0xFF180F1A) : AppColors.creamWhite,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              formatDate(day),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+      builder: (sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.86,
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formatDate(day),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ).copyWith(color: _textColor(sheetContext)),
+                ),
+                const SizedBox(height: 12),
+                InfoRow(
+                  icon: Icons.auto_graph_outlined,
+                  title: 'Cycle status',
+                  value: status,
+                ),
+                InfoRow(
+                  icon: Icons.water_drop_outlined,
+                  title: 'Flow',
+                  value: log.flow == 'None' && prediction.isPeriodDay(day)
+                      ? 'Expected period day'
+                      : log.flow,
+                ),
+                InfoRow(
+                  icon: Icons.mood_outlined,
+                  title: 'Mood',
+                  value: log.mood,
+                ),
+                InfoRow(
+                  icon: Icons.healing_outlined,
+                  title: 'Symptoms',
+                  value: log.symptoms.join(', '),
+                ),
+                InfoRow(
+                  icon: Icons.note_alt_outlined,
+                  title: 'Notes',
+                  value: log.notes.isEmpty
+                      ? 'No notes saved for this date.'
+                      : log.notes,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            InfoRow(
-              icon: Icons.auto_graph_outlined,
-              title: 'Cycle status',
-              value: status,
-            ),
-            InfoRow(
-              icon: Icons.water_drop_outlined,
-              title: 'Flow',
-              value: log.flow == 'None' && prediction.isPeriodDay(day)
-                  ? 'Expected period day'
-                  : log.flow,
-            ),
-            InfoRow(icon: Icons.mood_outlined, title: 'Mood', value: log.mood),
-            InfoRow(
-              icon: Icons.healing_outlined,
-              title: 'Symptoms',
-              value: log.symptoms.join(', '),
-            ),
-            InfoRow(
-              icon: Icons.note_alt_outlined,
-              title: 'Notes',
-              value: log.notes.isEmpty
-                  ? 'No notes saved for this date.'
-                  : log.notes,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1728,7 +1796,7 @@ class _DailyLogScreenState extends State<DailyLogScreen> {
                 onChanged: (value) =>
                     _set(_draft.copyWith(painLevel: clampDouble(value, 0, 10))),
               ),
-              const Wrap(
+              Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 spacing: 12,
                 runSpacing: 6,
@@ -1736,14 +1804,14 @@ class _DailyLogScreenState extends State<DailyLogScreen> {
                   Text(
                     '0 No pain',
                     style: TextStyle(
-                      color: AppColors.softText,
+                      color: _mutedTextColor(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   Text(
                     '10 Severe pain',
                     style: TextStyle(
-                      color: AppColors.softText,
+                      color: _mutedTextColor(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -2137,22 +2205,25 @@ class SelfCareScreen extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: SoftCard(
-                color: AppColors.softBlush,
+                color: _isDark(context)
+                    ? const Color(0xFF2B2031)
+                    : AppColors.softBlush,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Enable phone reminders',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
+                        color: _textColor(context),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'LunaCycle can send gentle period, check-in, and self-care reminders even when the app is closed.',
                       style: TextStyle(
-                        color: AppColors.softText,
+                        color: _mutedTextColor(context),
                         fontWeight: FontWeight.w700,
                         height: 1.35,
                       ),
@@ -2457,7 +2528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         appBar: AppBar(
           title: const Text('Settings'),
           backgroundColor: Colors.transparent,
-          foregroundColor: AppColors.deepText,
+          foregroundColor: _textColor(context),
           elevation: 0,
         ),
         body: AppScrollView(
@@ -2506,6 +2577,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               unit: 'days',
               onChanged: (value) =>
                   onChanged(state.copyWith(periodLength: value)),
+            ),
+            const SizedBox(height: 14),
+            SwitchTileCard(
+              icon: state.themeMode == ThemeMode.dark
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
+              title: 'Dark theme',
+              subtitle: state.themeMode == ThemeMode.dark
+                  ? 'A calm, low-light LunaCycle look is enabled.'
+                  : 'Use the gentle light LunaCycle look.',
+              value: state.themeMode == ThemeMode.dark,
+              onChanged: (value) => onChanged(
+                state.copyWith(
+                  themeMode: value ? ThemeMode.dark : ThemeMode.light,
+                ),
+              ),
             ),
             const SizedBox(height: 14),
             SwitchTileCard(
@@ -2823,21 +2910,24 @@ class InfoDocumentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     return SoftScaffold(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
           title: Text(title),
           backgroundColor: Colors.transparent,
-          foregroundColor: AppColors.deepText,
+          foregroundColor: _textColor(context),
           elevation: 0,
         ),
         body: AppScrollView(
           topPadding: 8,
           children: [
             SoftCard(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFEEF5), Color(0xFFEDE4FF)],
+              gradient: LinearGradient(
+                colors: dark
+                    ? const [Color(0xFF2B1830), Color(0xFF221733)]
+                    : const [Color(0xFFFFEEF5), Color(0xFFEDE4FF)],
               ),
               child: Row(
                 children: [
@@ -2852,7 +2942,7 @@ class InfoDocumentScreen extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w900,
-                      ),
+                      ).copyWith(color: _textColor(context)),
                     ),
                   ),
                 ],
@@ -2876,8 +2966,8 @@ class InfoDocumentScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       Text(
                         section.body,
-                        style: const TextStyle(
-                          color: AppColors.softText,
+                        style: TextStyle(
+                          color: _mutedTextColor(context),
                           fontWeight: FontWeight.w700,
                           height: 1.45,
                         ),
@@ -2934,11 +3024,11 @@ class PrivacyLockScreen extends StatelessWidget {
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Use your phone security to continue.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: AppColors.softText,
+                  color: _mutedTextColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -2975,6 +3065,7 @@ class BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     const tabs = [
       (Icons.favorite_outline, Icons.favorite, 'Today'),
       (Icons.calendar_month_outlined, Icons.calendar_month, 'Calendar'),
@@ -2988,12 +3079,16 @@ class BottomNav extends StatelessWidget {
         height: 74,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.88),
+          color: dark
+              ? const Color(0xFF211720).withValues(alpha: 0.96)
+              : Colors.white.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+          border: Border.all(color: _cardBorderColor(context)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primaryPink.withValues(alpha: 0.16),
+              color: dark
+                  ? Colors.black.withValues(alpha: 0.34)
+                  : AppColors.primaryPink.withValues(alpha: 0.16),
               blurRadius: 26,
               offset: const Offset(0, 12),
             ),
@@ -3022,7 +3117,7 @@ class BottomNav extends StatelessWidget {
                       color: isCenter
                           ? AppColors.primaryPink
                           : (selected
-                                ? AppColors.softBlush
+                                ? _softIconBackground(context)
                                 : Colors.transparent),
                       shape: isCenter ? BoxShape.circle : BoxShape.rectangle,
                       borderRadius: isCenter
@@ -3038,7 +3133,7 @@ class BottomNav extends StatelessWidget {
                               ? Colors.white
                               : (selected
                                     ? AppColors.primaryPink
-                                    : AppColors.softText),
+                                    : _mutedTextColor(context)),
                           size: isCenter ? 30 : 22,
                         ),
                         if (!isCenter) ...[
@@ -3051,7 +3146,7 @@ class BottomNav extends StatelessWidget {
                                 fontWeight: FontWeight.w900,
                                 color: selected
                                     ? AppColors.primaryPink
-                                    : AppColors.softText,
+                                    : _mutedTextColor(context),
                               ),
                             ),
                           ),
@@ -3069,6 +3164,26 @@ class BottomNav extends StatelessWidget {
   }
 }
 
+bool _isDark(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark;
+
+Color _textColor(BuildContext context) =>
+    _isDark(context) ? const Color(0xFFF9EDF5) : AppColors.deepText;
+
+Color _mutedTextColor(BuildContext context) =>
+    _isDark(context) ? const Color(0xFFE6CADA) : AppColors.softText;
+
+Color _cardColor(BuildContext context) => _isDark(context)
+    ? const Color(0xFF211720).withValues(alpha: 0.96)
+    : Colors.white.withValues(alpha: 0.92);
+
+Color _cardBorderColor(BuildContext context) => _isDark(context)
+    ? const Color(0xFF5A3F55).withValues(alpha: 0.72)
+    : Colors.white.withValues(alpha: 0.9);
+
+Color _softIconBackground(BuildContext context) =>
+    _isDark(context) ? const Color(0xFF35213A) : AppColors.softBlush;
+
 class SoftScaffold extends StatelessWidget {
   const SoftScaffold({super.key, required this.child});
 
@@ -3076,26 +3191,35 @@ class SoftScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     return DecoratedBox(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFF1F7), Color(0xFFFFE3EF), Color(0xFFFFF8FA)],
+          colors: dark
+              ? const [Color(0xFF130B14), Color(0xFF211327), Color(0xFF08070A)]
+              : const [Color(0xFFFFF1F7), Color(0xFFFFE3EF), Color(0xFFFFF8FA)],
           stops: [0, 0.45, 1],
         ),
       ),
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             top: 72,
             right: -28,
-            child: SoftOrb(size: 128, color: AppColors.lavender),
+            child: SoftOrb(
+              size: 128,
+              color: dark ? AppColors.midnightViolet : AppColors.lavender,
+            ),
           ),
-          const Positioned(
+          Positioned(
             top: 220,
             left: -46,
-            child: SoftOrb(size: 112, color: AppColors.lightRose),
+            child: SoftOrb(
+              size: 112,
+              color: dark ? AppColors.primaryPink : AppColors.lightRose,
+            ),
           ),
           const Positioned(bottom: 140, right: 32, child: SparkleField()),
           child,
@@ -3134,9 +3258,10 @@ class SparkleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     return IgnorePointer(
       child: Opacity(
-        opacity: 0.22,
+        opacity: dark ? 0.16 : 0.22,
         child: Column(
           children: List.generate(5, (index) {
             return Padding(
@@ -3144,7 +3269,7 @@ class SparkleField extends StatelessWidget {
               child: Icon(
                 Icons.auto_awesome,
                 size: 14 + index.toDouble(),
-                color: AppColors.primaryPink,
+                color: dark ? AppColors.midnightAmber : AppColors.primaryPink,
               ),
             );
           }),
@@ -3206,13 +3331,13 @@ class HeaderBar extends StatelessWidget {
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   height: 1.08,
-                ),
+                ).copyWith(color: _textColor(context)),
               ),
               const SizedBox(height: 5),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: AppColors.softText,
+                style: TextStyle(
+                  color: _mutedTextColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -3245,18 +3370,19 @@ class SoftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final surface = color ?? _cardColor(context);
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: gradient == null
-            ? color ?? Colors.white.withValues(alpha: 0.88)
-            : null,
+        color: gradient == null ? surface : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.85)),
+        border: Border.all(color: _cardBorderColor(context)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryPink.withValues(alpha: 0.10),
+            color: _isDark(context)
+                ? Colors.black.withValues(alpha: 0.28)
+                : AppColors.primaryPink.withValues(alpha: 0.10),
             blurRadius: 28,
             offset: const Offset(0, 14),
           ),
@@ -3292,7 +3418,7 @@ class MetricCard extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppColors.softBlush,
+              color: _softIconBackground(context),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: AppColors.primaryPink, size: 20),
@@ -3300,9 +3426,9 @@ class MetricCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: AppColors.softText,
+              color: _mutedTextColor(context),
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -3315,16 +3441,16 @@ class MetricCard extends StatelessWidget {
               fontSize: 17,
               fontWeight: FontWeight.w900,
               height: 1.08,
-            ),
+            ).copyWith(color: _textColor(context)),
           ),
           const SizedBox(height: 5),
           Text(
             supporting,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
-              color: AppColors.softText,
+              color: _mutedTextColor(context),
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -3480,8 +3606,8 @@ class DailyLogSection extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 helper!,
-                style: const TextStyle(
-                  color: AppColors.softText,
+                style: TextStyle(
+                  color: _mutedTextColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -3601,8 +3727,8 @@ class ReminderCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '${item.time.format(context)} - ${item.message}',
-                      style: const TextStyle(
-                        color: AppColors.softText,
+                      style: TextStyle(
+                        color: _mutedTextColor(context),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -3816,8 +3942,8 @@ class SelectableCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.softText,
+                    style: TextStyle(
+                      color: _mutedTextColor(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -3856,6 +3982,7 @@ class SwitchTileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canToggle = onChanged != null;
     final content = Row(
       children: [
         CircleAvatar(
@@ -3871,8 +3998,8 @@ class SwitchTileCard extends StatelessWidget {
               const SizedBox(height: 3),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: AppColors.softText,
+                style: TextStyle(
+                  color: _mutedTextColor(context),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -3886,7 +4013,12 @@ class SwitchTileCard extends StatelessWidget {
         ),
       ],
     );
-    return embedded ? content : SoftCard(child: content);
+    final tappable = InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: canToggle ? () => onChanged!(!value) : null,
+      child: content,
+    );
+    return embedded ? tappable : SoftCard(child: tappable);
   }
 }
 
@@ -3936,23 +4068,23 @@ class SettingsAction extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         color: danger
                             ? AppColors.periodPink
-                            : AppColors.deepText,
+                            : _textColor(context),
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(
-                        color: AppColors.softText,
+                      style: TextStyle(
+                        color: _mutedTextColor(context),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.softText,
+                color: _mutedTextColor(context),
               ),
             ],
           ),
@@ -4016,8 +4148,8 @@ class SectionTitle extends StatelessWidget {
                 textAlign: TextAlign.right,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.softText,
+                style: TextStyle(
+                  color: _mutedTextColor(context),
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -4062,8 +4194,8 @@ class InfoRow extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     value,
-                    style: const TextStyle(
-                      color: AppColors.softText,
+                    style: TextStyle(
+                      color: _mutedTextColor(context),
                       fontWeight: FontWeight.w700,
                       height: 1.35,
                     ),
@@ -4084,17 +4216,28 @@ class MedicalDisclaimer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SoftCard(
-      color: const Color(0xFFFFF3D8),
+      color: _isDark(context)
+          ? const Color(0xFF2B2230)
+          : const Color(0xFFFFF3D8),
       padding: const EdgeInsets.all(14),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline_rounded, color: Color(0xFF9B6A00)),
-          SizedBox(width: 10),
+          Icon(
+            Icons.info_outline_rounded,
+            color: _isDark(context)
+                ? AppColors.midnightAmber
+                : const Color(0xFF9B6A00),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Cycle predictions are estimates based on your logged data. This app does not provide medical advice, diagnosis, contraception, or fertility treatment guidance. If your period is very late, unusually painful, very heavy, or concerning, consider speaking with a qualified healthcare professional.',
-              style: TextStyle(fontWeight: FontWeight.w700, height: 1.35),
+              style: TextStyle(
+                color: _textColor(context),
+                fontWeight: FontWeight.w800,
+                height: 1.35,
+              ),
             ),
           ),
         ],
@@ -4111,8 +4254,8 @@ class WeekLabel extends StatelessWidget {
     child: Center(
       child: Text(
         label,
-        style: const TextStyle(
-          color: AppColors.softText,
+        style: TextStyle(
+          color: _mutedTextColor(context),
           fontWeight: FontWeight.w900,
         ),
       ),
@@ -4134,11 +4277,17 @@ class LegendPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = _isDark(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
+        color: dark ? const Color(0xFF2A1D2D) : Colors.white,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: dark
+              ? AppColors.midnightViolet.withValues(alpha: 0.55)
+              : AppColors.lightRose,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -4155,7 +4304,12 @@ class LegendPill extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 7),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+            ).copyWith(color: _textColor(context)),
+          ),
         ],
       ),
     );
@@ -4175,33 +4329,48 @@ class TinyDot extends StatelessWidget {
 }
 
 void _showMessageSheet(BuildContext context, String title, String body) {
+  final dark = _isDark(context);
   showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     showDragHandle: true,
-    backgroundColor: AppColors.creamWhite,
+    backgroundColor: dark ? const Color(0xFF180F1A) : AppColors.creamWhite,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
-    builder: (_) => Padding(
-      padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+    builder: (sheetContext) => ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 6, 22, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ).copyWith(color: _textColor(sheetContext)),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                body,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: _mutedTextColor(sheetContext),
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            body,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppColors.softText,
-              height: 1.4,
-            ),
-          ),
-        ],
+        ),
       ),
     ),
   );

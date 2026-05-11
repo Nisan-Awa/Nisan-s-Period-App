@@ -56,4 +56,37 @@ void main() {
 
     expect(find.textContaining('Good'), findsOneWidget);
   });
+
+  testWidgets('calendar day sheet scrolls without overflowing', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MainShell(
+          state: AppState.sample(),
+          onChanged: (_) {},
+          onClearData: () async {},
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    await tester.tap(find.text('Calendar'));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.text('13'));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.textContaining(', 2026'), findsOneWidget);
+    await tester.dragFrom(const Offset(360, 1450), const Offset(0, -350));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+  });
 }

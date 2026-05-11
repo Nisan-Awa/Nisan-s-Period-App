@@ -42,6 +42,11 @@ class AppTheme {
         surface: AppColors.midnightSurface,
         brightness: Brightness.dark,
       ),
+      textTheme: Typography.material2021().white.apply(
+        bodyColor: const Color(0xFFF8EDF5),
+        displayColor: const Color(0xFFF8EDF5),
+        fontFamily: 'Nunito',
+      ),
       sliderTheme: const SliderThemeData(
         activeTrackColor: AppColors.midnightViolet,
         inactiveTrackColor: AppColors.midnightSurface,
