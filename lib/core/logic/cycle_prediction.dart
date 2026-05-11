@@ -93,6 +93,14 @@ class CyclePrediction {
 
   bool isPeriodDay(DateTime date) {
     final day = dateOnly(date);
+    for (final record in state.history) {
+      final start = dateOnly(record.start);
+      final end = start.add(Duration(days: record.periodLength - 1));
+      if (!day.isBefore(start) && !day.isAfter(end)) {
+        return true;
+      }
+    }
+
     for (
       var start = currentCycleStart.subtract(
         Duration(days: effectiveCycleLength * 2),

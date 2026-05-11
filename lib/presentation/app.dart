@@ -56,11 +56,7 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
       _state = next;
       _loaded = true;
     });
-    DeviceServices.scheduleReminders(
-      next.reminders,
-      enabled: next.remindersEnabled,
-      hideSensitive: next.sensitiveNotificationsHidden,
-    );
+    _syncRemindersSilently(next);
   }
 
   void _update(AppState next) {
@@ -68,12 +64,19 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
     setState(() => _state = next);
     _repository.save(next);
     if (_shouldSyncReminders(previous, next)) {
-      DeviceServices.scheduleReminders(
-        next.reminders,
-        enabled: next.remindersEnabled,
-        hideSensitive: next.sensitiveNotificationsHidden,
-      );
+      _syncRemindersSilently(next);
     }
+  }
+
+  void _syncRemindersSilently(AppState state) {
+    DeviceServices.scheduleReminders(
+      state.reminders,
+      enabled: state.remindersEnabled,
+      hideSensitive: state.sensitiveNotificationsHidden,
+    ).catchError((Object error, StackTrace stackTrace) {
+      debugPrint('LunaCycle reminder sync failed: $error');
+      return false;
+    });
   }
 
   bool _shouldSyncReminders(AppState previous, AppState next) {
