@@ -9,7 +9,7 @@ void main() {
         home: MainShell(
           state: AppState.sample(),
           onChanged: (_) {},
-          onClearData: () async {},
+          onClearData: () async => AppState.sample(),
         ),
       ),
     );
@@ -32,7 +32,9 @@ void main() {
               state: state,
               onChanged: (next) => setState(() => state = next),
               onClearData: () async {
-                setState(() => state = AppState.sample());
+                final next = AppState.sample();
+                setState(() => state = next);
+                return next;
               },
             );
           },
@@ -57,6 +59,116 @@ void main() {
     expect(find.textContaining('Good'), findsOneWidget);
   });
 
+  testWidgets('saving name from settings does not throw', (
+    WidgetTester tester,
+  ) async {
+    var state = AppState.sample();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return MainShell(
+              state: state,
+              onChanged: (next) => setState(() => state = next),
+              onClearData: () async {
+                final next = AppState.sample();
+                setState(() => state = next);
+                return next;
+              },
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    await tester.tap(find.byTooltip('Open settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Your name'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Ada');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Greeting as Ada.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saving reminder from self-care does not throw', (
+    WidgetTester tester,
+  ) async {
+    var state = AppState.sample();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return MainShell(
+              state: state,
+              onChanged: (next) => setState(() => state = next),
+              onClearData: () async {
+                final next = AppState.sample();
+                setState(() => state = next);
+                return next;
+              },
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    await tester.tap(find.text('Self-Care'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Period start'), 450);
+    await tester.tap(find.text('Period start'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Hydrate gently');
+    await tester.tap(find.text('Save Reminder'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Hydrate gently'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('delete data refreshes settings state', (
+    WidgetTester tester,
+  ) async {
+    var state = AppState.sample().copyWith(name: 'Ada');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            return MainShell(
+              state: state,
+              onChanged: (next) => setState(() => state = next),
+              onClearData: () async {
+                final next = AppState.sample();
+                setState(() => state = next);
+                return next;
+              },
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1200));
+
+    await tester.tap(find.byTooltip('Open settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Delete data'), 450);
+    await tester.tap(find.text('Delete data'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Your name'), -450);
+
+    expect(find.text('Add your name for personal greetings.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('calendar day sheet scrolls without overflowing', (
     WidgetTester tester,
   ) async {
@@ -72,7 +184,7 @@ void main() {
         home: MainShell(
           state: AppState.sample(),
           onChanged: (_) {},
-          onClearData: () async {},
+          onClearData: () async => AppState.sample(),
         ),
       ),
     );

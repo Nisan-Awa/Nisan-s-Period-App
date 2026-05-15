@@ -32,24 +32,24 @@ class DeviceServices {
     required bool hideSensitive,
   }) async {
     try {
-      await _channel.invokeMethod<void>('scheduleReminders', {
-        'enabled': enabled,
-        'hideSensitive': hideSensitive,
-        'reminders': reminders
-            .where((reminder) => reminder.enabled)
-            .map(
-              (reminder) => {
-                'title': reminder.title,
-                'message': hideSensitive
-                    ? 'You have a LunaCycle reminder.'
-                    : reminder.message,
-                'hour': reminder.time.hour,
-                'minute': reminder.time.minute,
-              },
-            )
-            .toList(),
-      });
-      return true;
+      return await _channel.invokeMethod<bool>('scheduleReminders', {
+            'enabled': enabled,
+            'hideSensitive': hideSensitive,
+            'reminders': reminders
+                .where((reminder) => reminder.enabled)
+                .map(
+                  (reminder) => {
+                    'title': reminder.title,
+                    'message': hideSensitive
+                        ? 'You have a LunaCycle reminder.'
+                        : reminder.message,
+                    'hour': reminder.time.hour,
+                    'minute': reminder.time.minute,
+                  },
+                )
+                .toList(),
+          }) ??
+          false;
     } on PlatformException {
       return false;
     } on MissingPluginException {

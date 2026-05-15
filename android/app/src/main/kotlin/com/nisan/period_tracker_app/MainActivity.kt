@@ -51,8 +51,7 @@ class MainActivity : FlutterActivity() {
                 "requestNotifications" -> requestNotifications(result)
                 "scheduleReminders" -> {
                     @Suppress("UNCHECKED_CAST")
-                    scheduleReminders(call.arguments as? Map<String, Any?>)
-                    result.success(null)
+                    result.success(scheduleReminders(call.arguments as? Map<String, Any?>))
                 }
                 "showTestNotification" -> {
                     @Suppress("UNCHECKED_CAST")
@@ -136,12 +135,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun scheduleReminders(arguments: Map<String, Any?>?) {
+    private fun scheduleReminders(arguments: Map<String, Any?>?): Boolean {
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelReminders(alarmManager)
 
         val enabled = arguments?.get("enabled") as? Boolean ?: true
-        if (!enabled || !areNotificationsEnabled()) return
+        if (!enabled) return true
+        if (!areNotificationsEnabled()) return false
 
         val hideSensitive = arguments?.get("hideSensitive") as? Boolean ?: true
         val reminders = arguments?.get("reminders") as? List<*> ?: emptyList<Any>()
@@ -184,6 +184,7 @@ class MainActivity : FlutterActivity() {
                 pendingIntent
             )
         }
+        return true
     }
 
     private fun cancelReminders(alarmManager: AlarmManager) {

@@ -112,11 +112,14 @@ class _LunaCycleRootState extends State<LunaCycleRoot> {
     return false;
   }
 
-  Future<void> _clearData() async {
+  Future<AppState> _clearData() async {
     final next = AppState.sample();
     setState(() => _state = next);
+    lunaCycleThemeMode.value = next.themeMode;
     await _repository.clear();
     await _repository.save(next);
+    _syncRemindersSilently(next);
+    return next;
   }
 
   @override
@@ -534,7 +537,7 @@ class MainShell extends StatefulWidget {
 
   final AppState state;
   final ValueChanged<AppState> onChanged;
-  final Future<void> Function() onClearData;
+  final Future<AppState> Function() onClearData;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -2299,9 +2302,7 @@ class SelfCareScreen extends StatelessWidget {
   }
 
   Future<void> _editReminder(BuildContext context, int index) async {
-    var reminder = state.reminders[index];
-    final messageController = TextEditingController(text: reminder.message);
-    await showModalBottomSheet<void>(
+    final updated = await showModalBottomSheet<ReminderItem>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -2309,80 +2310,12 @@ class SelfCareScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                22,
-                4,
-                22,
-                24 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    reminder.title,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: messageController,
-                    decoration: InputDecoration(
-                      labelText: 'Reminder message',
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showTimePicker(
-                        context: context,
-                        initialTime: reminder.time,
-                      );
-                      if (picked != null) {
-                        setSheetState(
-                          () => reminder = reminder.copyWith(time: picked),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.schedule_outlined),
-                    label: Text('Time: ${reminder.time.format(context)}'),
-                  ),
-                  const SizedBox(height: 14),
-                  FilledButton.icon(
-                    onPressed: () {
-                      final reminders = [...state.reminders];
-                      reminders[index] = reminder.copyWith(
-                        message: messageController.text.trim().isEmpty
-                            ? reminder.message
-                            : messageController.text.trim(),
-                        enabled: true,
-                      );
-                      onChanged(state.copyWith(reminders: reminders));
-                      Navigator.of(sheetContext).pop();
-                    },
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('Save Reminder'),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (_) => _ReminderEditorSheet(reminder: state.reminders[index]),
     );
-    messageController.dispose();
+    if (!context.mounted || updated == null) return;
+    final reminders = [...state.reminders];
+    reminders[index] = updated;
+    onChanged(state.copyWith(reminders: reminders));
   }
 
   List<CareTip> _tipsFor(String phase, DailyLog log) {
@@ -2497,7 +2430,7 @@ class SettingsScreen extends StatefulWidget {
 
   final AppState state;
   final ValueChanged<AppState> onChanged;
-  final Future<void> Function() onClearData;
+  final Future<AppState> Function() onClearData;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -2683,7 +2616,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Clear cycle and health logs from this device.',
               danger: true,
               onTap: () async {
-                await widget.onClearData();
+                final next = await widget.onClearData();
+                if (!mounted) return;
+                setState(() => state = next);
                 if (context.mounted) {
                   _showMessageSheet(
                     context,
@@ -2702,55 +2637,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _editName(BuildContext context) async {
-    final controller = TextEditingController(text: state.name);
     final savedName = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: AppColors.creamWhite,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-          title: const Text('Your Name'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) =>
-                Navigator.of(dialogContext).pop(controller.text.trim()),
-            decoration: InputDecoration(
-              hintText: 'Enter your first name',
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      builder: (_) => _NameDialog(initialName: state.name),
     );
-    if (!mounted) {
-      controller.dispose();
-      return;
-    }
+    if (!mounted) return;
     if (savedName != null) {
-      onChanged(state.copyWith(name: savedName));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          onChanged(state.copyWith(name: savedName));
+        }
+      });
     }
-    controller.dispose();
   }
 
   Future<void> _toggleAppLock(bool enabled) async {
@@ -2779,6 +2677,159 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(
           'App lock was not enabled. Confirm your phone lock and try again.',
         ),
+      ),
+    );
+  }
+}
+
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(_controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      backgroundColor: AppColors.creamWhite,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      title: const Text('Your Name'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _save(),
+        decoration: InputDecoration(
+          hintText: 'Enter your first name',
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}
+
+class _ReminderEditorSheet extends StatefulWidget {
+  const _ReminderEditorSheet({required this.reminder});
+
+  final ReminderItem reminder;
+
+  @override
+  State<_ReminderEditorSheet> createState() => _ReminderEditorSheetState();
+}
+
+class _ReminderEditorSheetState extends State<_ReminderEditorSheet> {
+  late ReminderItem _draft;
+  late final TextEditingController _messageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.reminder;
+    _messageController = TextEditingController(text: _draft.message);
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _draft.time,
+    );
+    if (picked != null && mounted) {
+      setState(() => _draft = _draft.copyWith(time: picked));
+    }
+  }
+
+  void _save() {
+    final message = _messageController.text.trim();
+    Navigator.of(context).pop(
+      _draft.copyWith(
+        message: message.isEmpty ? _draft.message : message,
+        enabled: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        22,
+        4,
+        22,
+        24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _draft.title,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _messageController,
+            decoration: InputDecoration(
+              labelText: 'Reminder message',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _pickTime,
+            icon: const Icon(Icons.schedule_outlined),
+            label: Text('Time: ${_draft.time.format(context)}'),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: _save,
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Save Reminder'),
+          ),
+        ],
       ),
     );
   }
